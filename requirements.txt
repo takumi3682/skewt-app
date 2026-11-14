@@ -9,4 +9,5 @@ requests
 cdsapi
 duckdb
 polars
+lxml
 git+https://github.com/takumi3682/meteo_lib.git
