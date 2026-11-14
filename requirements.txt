@@ -6,6 +6,7 @@ metpy
 xarray
 netCDF4
 requests
+cdsapi
 cfgrib
 duckdb
 polars
