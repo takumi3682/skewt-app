@@ -25,7 +25,7 @@ st.sidebar.title("🛠️ Sounding Settings")
 data_source = st.sidebar.selectbox(
     "Data Source",
     options=["MSM", "IGRA (Observed)"],
-    index=0
+    index=1
 )
 is_igra = data_source.startswith("IGRA")
 
