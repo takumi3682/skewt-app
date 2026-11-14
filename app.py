@@ -21,50 +21,64 @@ st.set_page_config(
 # -----------------------------------------------------------------------------
 st.sidebar.title("🛠️ Sounding Settings")
 
-# 1. データソース選択
+# 1. データソース選択（ERA5を削除し、MSMとIGRAのみに整理）
 data_source = st.sidebar.selectbox(
     "Data Source",
-    options=["MSM", "ERA5", "IGRA (Observed)"],
+    options=["MSM", "IGRA (Observed)"],
     index=0
 )
+is_igra = data_source.startswith("IGRA")
 
 # 2. 地点指定
 st.sidebar.subheader("📍 Location")
-loc_mode = st.sidebar.radio("Location Mode", ["Preset City", "Latitude / Longitude"], horizontal=True)
 
-# 代表地点プリセット
+# 代表地点プリセット（igra_active: 現在も高層ゾンデ観測を継続している地点か）
 PRESET_CITIES = {
-    "仙台 (Sendai)": {"lat": 38.2682, "lon": 140.8694, "igra_id": "JA000047590"},
-    "秋田 (Akita)": {"lat": 39.7167, "lon": 140.1000, "igra_id": "JA000047582"},
-    "館野/つくば (Tateno)": {"lat": 36.0583, "lon": 140.1250, "igra_id": "JA000047646"},
-    "輪島 (Wajima)": {"lat": 37.3833, "lon": 136.9000, "igra_id": "JA000047600"},
-    "札幌 (Sapporo)": {"lat": 43.0642, "lon": 141.3469, "igra_id": "JA000047412"},
-    "八丈島 (Hachijojima)": {"lat": 33.1167, "lon": 139.7833, "igra_id": "JA000047678"},
-    "鹿児島 (Kagoshima)": {"lat": 31.5597, "lon": 130.5571, "igra_id": "JA000047827"},
+    "館野/つくば (Tateno)": {"lat": 36.0583, "lon": 140.1250, "igra_id": "JAM00047646", "igra_active": True},
+    "仙台 (Sendai)": {"lat": 38.2682, "lon": 140.8694, "igra_id": "JAM00047590", "igra_active": False},
+    "秋田 (Akita)": {"lat": 39.7167, "lon": 140.1000, "igra_id": "JAM00047582", "igra_active": True},
+    "輪島 (Wajima)": {"lat": 37.3833, "lon": 136.9000, "igra_id": "JAM00047600", "igra_active": True},
+    "札幌 (Sapporo)": {"lat": 43.0642, "lon": 141.3469, "igra_id": "JAM00047412", "igra_active": True},
+    "八丈島 (Hachijojima)": {"lat": 33.1167, "lon": 139.7833, "igra_id": "JAM00047678", "igra_active": True},
+    "鹿児島 (Kagoshima)": {"lat": 31.5597, "lon": 130.5571, "igra_id": "JAM00047827", "igra_active": True},
 }
 
+# IGRA選択時は観測地点のみ、MSM選択時は任意の緯度経度指定も許可
+if is_igra:
+    loc_mode = "Preset City"
+else:
+    loc_mode = st.sidebar.radio("Location Mode", ["Preset City", "Latitude / Longitude"], horizontal=True)
+
 if loc_mode == "Preset City":
-    selected_city_name = st.sidebar.selectbox("Select Station / City", list(PRESET_CITIES.keys()), index=0)
-    city_info = PRESET_CITIES[selected_city_name]
+    # IGRA選択時は観測終了地点（仙台）を除外
+    available_cities = {
+        k: v for k, v in PRESET_CITIES.items()
+        if (not is_igra) or v["igra_active"]
+    }
+    selected_city_name = st.sidebar.selectbox(
+        "Select Station / City",
+        list(available_cities.keys()),
+        index=0
+    )
+    city_info = available_cities[selected_city_name]
     lat = city_info["lat"]
     lon = city_info["lon"]
-    igra_id = city_info["igra_id"]
     display_location_name = selected_city_name.split(" ")[0]
 else:
     col_lat, col_lon = st.sidebar.columns(2)
     lat = col_lat.number_input("Latitude (°N)", value=38.2682, min_value=-90.0, max_value=90.0, step=0.1)
     lon = col_lon.number_input("Longitude (°E)", value=140.8694, min_value=-180.0, max_value=180.0, step=0.1)
-    igra_id = None
     display_location_name = f"Lat: {lat:.2f}, Lon: {lon:.2f}"
 
 # 3. 日時指定
 st.sidebar.subheader("📅 Date & Time (UTC)")
 target_date = st.sidebar.date_input("Date", value=datetime(2026, 10, 11).date())
 
-# 高層ゾンデ・主モデル時間 (00 or 12 UTC が基本)
+# IGRAは00/12UTCのみ、MSMは3時間ごと
+hour_options = [0, 12] if is_igra else [0, 3, 6, 9, 12, 15, 18, 21]
 utc_hour = st.sidebar.select_slider(
     "Hour (UTC)",
-    options=[0, 3, 6, 9, 12, 15, 18, 21],
+    options=hour_options,
     value=0
 )
 target_dt = datetime.combine(target_date, time(hour=utc_hour))
@@ -81,9 +95,7 @@ def load_sounding_data(
     station: Optional[str] = None
 ):
     """sounding_utils.get_sounding を介してプロファイル辞書を取得"""
-    # 引数 source は小文字（"msm", "era5", "igra"）に統一
     src_key = source_name.lower().split()[0]  # "IGRA (Observed)" -> "igra"
-    
     return su.get_sounding(
         source=src_key,
         dt=dt,
@@ -91,7 +103,6 @@ def load_sounding_data(
         lon=lon,
         station=station
     )
-
 
 # -----------------------------------------------------------------------------
 # メイン画面描画
@@ -104,25 +115,13 @@ title_label = f"{target_dt:%Y-%m-%d %H}UTC {display_location_name} ({data_source
 
 with st.spinner(f"Loading sounding data from {data_source}..."):
     try:
-        # 地点モードに応じて station名 を渡すか、lat/lon を渡すかを分岐
-        if loc_mode == "Preset City":
-            # プリセット選択時は station名（都市名）を直接渡して内部で解決
-            sounding_data = load_sounding_data(
-                source_name=data_source,
-                dt=target_dt,
-                lat=lat,
-                lon=lon,
-                station=display_location_name
-            )
-        else:
-            # 緯度経度手動入力時は lat/lon を渡す
-            sounding_data = load_sounding_data(
-                source_name=data_source,
-                dt=target_dt,
-                lat=lat,
-                lon=lon,
-                station=None
-            )
+        sounding_data = load_sounding_data(
+            source_name=data_source,
+            dt=target_dt,
+            lat=lat,
+            lon=lon,
+            station=display_location_name if loc_mode == "Preset City" else None
+        )
 
         if sounding_data is not None:
             fig = sup.create_skewt_figure(sounding_data, title_info=title_label)
