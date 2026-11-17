@@ -81,11 +81,12 @@ selected_date = st.sidebar.date_input(
 utc_options = [0, 12]
 default_hour_index = utc_options.index(default_dt.hour)
 
-selected_hour = st.sidebar.selectbox(
+selected_hour = st.sidebar.radio(
     "Hour (UTC)",
     options=utc_options,
     index=default_hour_index,
     format_func=lambda h: f"{h:02d}:00 UTC ({(h + 9) % 24:02d}:00 JST)",
+    horizontal=True,
 )
 
 target_dt = datetime(
