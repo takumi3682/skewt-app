@@ -56,6 +56,7 @@ IGRA_STATIONS = {
     "南大東島 (Minamidaitojima)": "JAM00047945",
     "父島 (Chichijima)": "JAM00047971",
     "南鳥島 (Minamitorishima)": "JAM00047991",
+    "昭和基地（Syowa）": "AYM00089532",
 }
 
 selected_station_label = st.sidebar.selectbox(
